@@ -1,0 +1,41 @@
+[workspace]
+name = "gsplat-rerun-minimal"
+version = "0.1.0"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64"]
+
+[tasks.example-chair]
+cmd = "cargo run --release"
+description = "Run the bundled chair example in release mode."
+
+[tasks.view-ply]
+args = ["ply"]
+cmd = "cargo run --release -- \"{{ ply }}\""
+description = "Run the viewer on a user-provided PLY path via `pixi run view-ply /path/to/scene.ply`."
+
+[tasks.fmt]
+cmd = "cargo fmt --all"
+description = "Format the Rust code."
+
+[tasks.clippy]
+cmd = "cargo clippy --all-targets -- -D warnings"
+description = "Run clippy on all targets and fail on warnings."
+
+[tasks.test]
+cmd = "cargo test"
+description = "Run the Rust test suite."
+
+[dependencies]
+clang = "*"
+cmake = "*"
+pkg-config = "*"
+rust = "1.93.*"
+
+[target.linux-64.dependencies]
+libxkbcommon = "*"
+wayland = "*"
+xorg-libx11 = "*"
+xorg-libxcursor = "*"
+xorg-libxi = "*"
+xorg-libxinerama = "*"
+xorg-libxrandr = "*"
