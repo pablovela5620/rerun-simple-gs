@@ -7,10 +7,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::gaussian_renderer::GaussianDrawData;
 use glam::{Affine3A, Mat2, Mat3, Mat4, Quat, Vec2, Vec3};
 use rayon::prelude::*;
-use re_sdk_types::blueprint::archetypes::EyeControls3D;
-use re_sdk_types::components::{Position3D, Vector3D};
 use re_view::{DataResultQuery as _, VisualizerInstructionQueryResults};
 use re_view_spatial::{SpatialViewState, TransformTreeContext};
 use re_viewer_context::{
@@ -18,12 +17,9 @@ use re_viewer_context::{
     ViewSystemExecutionError, ViewSystemIdentifier, VisualizerExecutionOutput, VisualizerQueryInfo,
     VisualizerSystem,
 };
-use re_viewport_blueprint::ViewProperty;
-use rerun::Archetype as _;
+use rerun::{Archetype as _, Component as _};
 
-use crate::gaussian_archetype::GaussianSplats3D;
-use crate::gaussian_renderer::GaussianDrawData;
-
+const SPLAT_ENTITY_PATH: &str = "world/splats";
 const MAX_SPLATS_RENDERED: usize = 200_000;
 const MIN_RADIUS_PX: f32 = 0.35;
 const OPACITY_SCALE: f32 = 1.0;
@@ -32,6 +28,83 @@ const PARALLEL_SPLAT_THRESHOLD: usize = 16_384;
 const SH_C0: f32 = 0.282_094_8;
 const BRUSH_COVARIANCE_BLUR_PX: f32 = 0.3;
 const BRUSH_VISIBILITY_ALPHA_THRESHOLD: f32 = 1.0 / 255.0;
+
+struct GaussianSplats3D;
+
+impl rerun::Archetype for GaussianSplats3D {
+    fn name() -> rerun::ArchetypeName {
+        "GaussianSplats3D".into()
+    }
+
+    fn display_name() -> &'static str {
+        "Gaussian Splats 3D"
+    }
+
+    fn required_components() -> std::borrow::Cow<'static, [rerun::ComponentDescriptor]> {
+        vec![
+            Self::descriptor_centers(),
+            Self::descriptor_quaternions(),
+            Self::descriptor_scales(),
+            Self::descriptor_opacities(),
+            Self::descriptor_colors(),
+        ]
+        .into()
+    }
+
+    fn optional_components() -> std::borrow::Cow<'static, [rerun::ComponentDescriptor]> {
+        vec![Self::descriptor_sh_coefficients()].into()
+    }
+}
+
+impl GaussianSplats3D {
+    fn descriptor_centers() -> rerun::ComponentDescriptor {
+        rerun::ComponentDescriptor {
+            archetype: Some("GaussianSplats3D".into()),
+            component: "GaussianSplats3D:centers".into(),
+            component_type: Some(rerun::components::Translation3D::name()),
+        }
+    }
+
+    fn descriptor_quaternions() -> rerun::ComponentDescriptor {
+        rerun::ComponentDescriptor {
+            archetype: Some("GaussianSplats3D".into()),
+            component: "GaussianSplats3D:quaternions".into(),
+            component_type: Some(rerun::components::RotationQuat::name()),
+        }
+    }
+
+    fn descriptor_scales() -> rerun::ComponentDescriptor {
+        rerun::ComponentDescriptor {
+            archetype: Some("GaussianSplats3D".into()),
+            component: "GaussianSplats3D:scales".into(),
+            component_type: Some(rerun::components::Scale3D::name()),
+        }
+    }
+
+    fn descriptor_opacities() -> rerun::ComponentDescriptor {
+        rerun::ComponentDescriptor {
+            archetype: Some("GaussianSplats3D".into()),
+            component: "GaussianSplats3D:opacities".into(),
+            component_type: Some(rerun::components::Opacity::name()),
+        }
+    }
+
+    fn descriptor_colors() -> rerun::ComponentDescriptor {
+        rerun::ComponentDescriptor {
+            archetype: Some("GaussianSplats3D".into()),
+            component: "GaussianSplats3D:colors".into(),
+            component_type: Some(rerun::components::Color::name()),
+        }
+    }
+
+    fn descriptor_sh_coefficients() -> rerun::ComponentDescriptor {
+        rerun::ComponentDescriptor {
+            archetype: Some("GaussianSplats3D".into()),
+            component: "GaussianSplats3D:sh_coefficients".into(),
+            component_type: Some(rerun::components::TensorData::name()),
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct GaussianSplatVisualizer {
@@ -143,6 +216,10 @@ impl VisualizerSystem for GaussianSplatVisualizer {
         {
             // Query one logged `GaussianSplats3D` entity and rebuild the renderer-facing cloud only
             // when the recorded data or transform signature changes.
+            if data_result.entity_path.to_string().trim_start_matches('/') != SPLAT_ENTITY_PATH {
+                continue;
+            }
+
             let results = data_result.query_archetype_with_history::<GaussianSplats3D>(
                 ctx,
                 query,
@@ -229,10 +306,10 @@ impl VisualizerSystem for GaussianSplatVisualizer {
             }
 
             let cloud = cache_entry.cloud.clone();
-            // Camera extraction prefers the active 3D view state, then the startup blueprint eye,
-            // then a simple bounds-based fallback so the example still works on first boot.
-            let camera = camera_from_view(ctx, query, cloud.bounds_world)
-                .unwrap_or_else(|| fallback_camera(cloud.bounds_world));
+            // Camera extraction prefers the active 3D view state, then a simple bounds-based
+            // fallback so the example still works before the user interacts with the camera.
+            let camera =
+                camera_from_view(ctx, query).unwrap_or_else(|| fallback_camera(cloud.bounds_world));
             let mut visible = Vec::new();
             // Visibility is conservative: quickly reject obviously invisible splats, then keep the
             // surviving candidates sorted back-to-front for the renderer.
@@ -503,12 +580,8 @@ fn extract_sh_coefficients(
     }))
 }
 
-fn camera_from_view(
-    ctx: &ViewContext<'_>,
-    query: &ViewQuery<'_>,
-    bounds: Option<(Vec3, Vec3)>,
-) -> Option<CameraApproximation> {
-    camera_from_spatial_view_state(ctx, query).or_else(|| camera_from_blueprint(ctx, query, bounds))
+fn camera_from_view(ctx: &ViewContext<'_>, query: &ViewQuery<'_>) -> Option<CameraApproximation> {
+    camera_from_spatial_view_state(ctx, query)
 }
 
 fn camera_from_spatial_view_state(
@@ -529,46 +602,6 @@ fn camera_from_spatial_view_state(
         viewport_size_px,
         near_plane,
     })
-}
-
-fn camera_from_blueprint(
-    ctx: &ViewContext<'_>,
-    query: &ViewQuery<'_>,
-    bounds: Option<(Vec3, Vec3)>,
-) -> Option<CameraApproximation> {
-    let eye_property = ViewProperty::from_archetype::<EyeControls3D>(
-        ctx.blueprint_db(),
-        ctx.blueprint_query(),
-        query.view_id,
-    );
-
-    let bounds_center = bounds.map_or(Vec3::ZERO, |(min, max)| 0.5 * (min + max));
-    let position = eye_property
-        .component_or_fallback::<Position3D>(ctx, EyeControls3D::descriptor_position().component)
-        .ok()
-        .map(|position| Vec3::from(position.0))
-        .unwrap_or(bounds_center + Vec3::new(0.0, 0.0, 3.0));
-    let look_target = eye_property
-        .component_or_fallback::<Position3D>(ctx, EyeControls3D::descriptor_look_target().component)
-        .ok()
-        .map(|position| Vec3::from(position.0))
-        .unwrap_or(bounds_center);
-    let up = eye_property
-        .component_or_fallback::<Vector3D>(ctx, EyeControls3D::descriptor_eye_up().component)
-        .ok()
-        .map(|vector| Vec3::from(vector.0))
-        .filter(|up| up.length_squared() > 1e-6)
-        .unwrap_or(Vec3::Y);
-    let viewport_size_px =
-        published_viewport_size_px(ctx, query).unwrap_or(Vec2::new(1600.0, 900.0));
-    Some(make_camera_approximation(
-        position,
-        look_target,
-        up.normalize_or_zero(),
-        55.0_f32.to_radians(),
-        viewport_size_px,
-        0.01,
-    ))
 }
 
 fn published_viewport_size_px(ctx: &ViewContext<'_>, query: &ViewQuery<'_>) -> Option<Vec2> {

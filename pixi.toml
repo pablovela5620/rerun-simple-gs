@@ -1,17 +1,11 @@
 [workspace]
 name = "gsplat-rerun-minimal"
-version = "0.1.0"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64"]
 
-[tasks.example-chair]
+[tasks.viewer]
 cmd = "cargo run --release"
-description = "Run the bundled chair example in release mode."
-
-[tasks.view-ply]
-args = ["ply"]
-cmd = "cargo run --release -- \"{{ ply }}\""
-description = "Run the viewer on a user-provided PLY path via `pixi run view-ply /path/to/scene.ply`."
+description = "Launch the stock Rerun viewer extended with the Gaussian splat visualizer."
 
 [tasks.fmt]
 cmd = "cargo fmt --all"
@@ -19,7 +13,7 @@ description = "Format the Rust code."
 
 [tasks.clippy]
 cmd = "cargo clippy --all-targets -- -D warnings"
-description = "Run clippy on all targets and fail on warnings."
+description = "Run clippy and fail on warnings."
 
 [tasks.test]
 cmd = "cargo test"
@@ -28,8 +22,14 @@ description = "Run the Rust test suite."
 [dependencies]
 clang = "*"
 cmake = "*"
+numpy = "*"
 pkg-config = "*"
+python = "3.12.*"
 rust = "1.93.*"
+
+[pypi-dependencies]
+plyfile = ">=1.1,<2"
+rerun-sdk = "==0.30.0"
 
 [target.linux-64.dependencies]
 libxkbcommon = "*"

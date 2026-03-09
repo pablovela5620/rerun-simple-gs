@@ -1,2 +1,4 @@
 /.pixi/
 /target/
+/.artifacts/
+/.artifacts_viewer.xwd
