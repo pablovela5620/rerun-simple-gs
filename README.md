@@ -22,22 +22,10 @@ Your own PLY:
 cargo run -- /absolute/path/to/scene.ply
 ```
 
-Your own PLY at a custom entity path:
-
-```bash
-cargo run -- /absolute/path/to/scene.ply scene/reconstruction/splats
-```
-
 Or with Pixi-managed dependencies:
 
 ```bash
 pixi run view-ply -- /absolute/path/to/scene.ply
-```
-
-Or with an explicit entity path:
-
-```bash
-pixi run view-ply-at -- /absolute/path/to/scene.ply scene/reconstruction/splats
 ```
 
 For the fastest local run outside Pixi, use:
@@ -49,7 +37,7 @@ cargo run --release -- /absolute/path/to/scene.ply
 ## How It Works
 
 1. `src/ply.rs` loads a static Gaussian-splat PLY into a typed cloud.
-2. `src/main.rs` logs that cloud once as `GaussianSplats3D` at the chosen entity path.
+2. `src/main.rs` logs that cloud once as `GaussianSplats3D`.
 3. `src/main.rs` starts the native Rerun viewer and registers one custom visualizer.
 4. `src/gaussian_visualizer.rs` queries the archetype, builds the render cloud, and computes the visible candidate set.
 5. `src/gaussian_renderer.rs` runs the known-working splat renderer and draws inside `Spatial3DView`.

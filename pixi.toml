@@ -13,10 +13,6 @@ args = ["ply"]
 cmd = "cargo run --release -- \"{{ ply }}\""
 description = "Run the viewer on a user-provided PLY path via `pixi run view-ply /path/to/scene.ply`."
 
-[tasks.view-ply-at]
-cmd = "cargo run --release"
-description = "Run the viewer on a user-provided PLY at a custom entity path via `pixi run view-ply-at -- /path/to/scene.ply entity/path`."
-
 [tasks.fmt]
 cmd = "cargo fmt --all"
 description = "Format the Rust code."
