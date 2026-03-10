@@ -31,6 +31,13 @@ rust = "1.93.*"
 plyfile = ">=1.1,<2"
 rerun-sdk = "==0.30.0"
 
+[feature.dev.dependencies]
+beartype = ">=0.20"
+pyrefly = ">=0.34.0,<0.35"
+
+[environments]
+dev = { features = ["dev"], solve-group = "default" }
+
 [target.linux-64.dependencies]
 libxkbcommon = "*"
 wayland = "*"
