@@ -87,7 +87,7 @@ So the listener code exists here because this is an **extension binary**, not be
 
 ## What `main.rs` Actually Does
 
-Read [src/main.rs](/home/pablo/0Dev/personal/gsplat-rerun-minimal/src/main.rs) from top to bottom.
+Read [`src/main.rs`](../src/main.rs) from top to bottom.
 
 It is intentionally linear.
 

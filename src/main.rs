@@ -1,7 +1,7 @@
 //! Stock Rerun viewer plus one extra Gaussian splat visualizer.
 //!
 //! This binary does exactly two non-standard things:
-//! - listen for normal Rerun gRPC logs on `0.0.0.0:9876`
+//! - listen for normal Rerun gRPC logs on `127.0.0.1:9876`
 //! - register one custom Gaussian splat visualizer on the built-in `Spatial3DView`
 
 mod gaussian_renderer;
@@ -20,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
     re_log::setup_logging();
     re_crash_handler::install_crash_handlers(re_viewer::build_info());
 
-    let grpc_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, GRPC_PORT));
+    let grpc_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, GRPC_PORT));
     re_log::info!("Listening for Rerun logs on rerun+http://127.0.0.1:{GRPC_PORT}/proxy");
     let grpc_rx = re_grpc_server::spawn_with_recv(
         grpc_addr,

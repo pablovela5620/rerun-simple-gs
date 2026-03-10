@@ -50,6 +50,32 @@ def _sh_dc_to_rgb(dc_coefficients: npt.NDArray[np.float32]) -> npt.NDArray[np.fl
     return np.maximum(dc_coefficients * SH_C0 + 0.5, 0.0)
 
 
+def _normalized_color_channels(
+    vertex: np.ndarray, names: set[str]
+) -> npt.NDArray[np.float32] | None:
+    color_names = (
+        ("red", "green", "blue")
+        if {"red", "green", "blue"} <= names
+        else ("r", "g", "b")
+        if {"r", "g", "b"} <= names
+        else None
+    )
+    if color_names is None:
+        return None
+
+    channels = []
+    for name in color_names:
+        values = np.asarray(vertex[name])
+        if np.issubdtype(values.dtype, np.integer):
+            dtype_info = np.iinfo(values.dtype)
+            channel = values.astype(np.float32) / np.float32(dtype_info.max)
+        else:
+            channel = values.astype(np.float32)
+        channels.append(np.clip(channel, 0.0, 1.0))
+
+    return np.stack(channels, axis=1).astype(np.float32)
+
+
 @dataclass(frozen=True)
 class Gaussians3D(rr.AsComponents):
     """Minimal Python logging wrapper for the Rust Gaussian splat visualizer."""
@@ -156,42 +182,38 @@ class Gaussians3D(rr.AsComponents):
                 [vertex["f_dc_0"], vertex["f_dc_1"], vertex["f_dc_2"]], axis=1
             ).astype(np.float32)
             colors_dc = _sh_dc_to_rgb(dc_coefficients)
-        elif {"red", "green", "blue"} <= names:
-            colors_dc = (
-                np.stack([vertex["red"], vertex["green"], vertex["blue"]], axis=1).astype(
-                    np.float32
-                )
-                / 255.0
-            )
+        elif (colors := _normalized_color_channels(vertex, names)) is not None:
+            colors_dc = colors
         else:
             colors_dc = np.ones((len(vertex), 3), dtype=np.float32)
 
-        rest_names = sorted(
-            (
-                name
-                for name in names
-                if name.startswith("f_rest_") and name[len("f_rest_") :].isdigit()
-            ),
-            key=lambda name: int(name[len("f_rest_") :]),
-        )
+        rest_fields = {
+            int(name[len("f_rest_") :]): np.asarray(vertex[name], dtype=np.float32)
+            for name in names
+            if name.startswith("f_rest_") and name[len("f_rest_") :].isdigit()
+        }
 
         sh_coefficients: npt.NDArray[np.float32] | None = None
-        if dc_coefficients is not None or rest_names:
-            extra_coefficients = len(rest_names) // 3
+        if dc_coefficients is not None or rest_fields:
+            extra_coefficients = len(rest_fields) // 3
             coeffs_per_channel = extra_coefficients + 1
             sh_coefficients = np.zeros((len(vertex), coeffs_per_channel, 3), dtype=np.float32)
             if dc_coefficients is not None:
                 sh_coefficients[:, 0, :] = dc_coefficients
 
             # `f_rest_*` is channel-major: all red coefficients, then green, then blue.
+            # Missing coefficients are treated as zero so partial payloads degrade gracefully.
+            zeros = np.zeros(len(vertex), dtype=np.float32)
             for coefficient_index in range(extra_coefficients):
-                sh_coefficients[:, coefficient_index + 1, 0] = vertex[f"f_rest_{coefficient_index}"]
-                sh_coefficients[:, coefficient_index + 1, 1] = vertex[
-                    f"f_rest_{extra_coefficients + coefficient_index}"
-                ]
-                sh_coefficients[:, coefficient_index + 1, 2] = vertex[
-                    f"f_rest_{extra_coefficients * 2 + coefficient_index}"
-                ]
+                sh_coefficients[:, coefficient_index + 1, 0] = rest_fields.get(
+                    coefficient_index, zeros
+                )
+                sh_coefficients[:, coefficient_index + 1, 1] = rest_fields.get(
+                    extra_coefficients + coefficient_index, zeros
+                )
+                sh_coefficients[:, coefficient_index + 1, 2] = rest_fields.get(
+                    extra_coefficients * 2 + coefficient_index, zeros
+                )
 
         return cls(
             centers=centers,

@@ -225,7 +225,7 @@ That matches the working renderer contract from the larger repo.
 It does four things:
 
 1. Set up logging and crash handlers.
-2. Start a gRPC server on `0.0.0.0:9876`.
+2. Start a gRPC server on `127.0.0.1:9876`.
 3. Launch the native Rerun viewer.
 4. Register `GaussianSplatVisualizer` onto the built-in `Spatial3DView`.
 
