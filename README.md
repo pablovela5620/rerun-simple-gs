@@ -1,46 +1,55 @@
-# gsplat-rerun-minimal
+# rerun-simple-gs
 
-Minimal Rust example showing how to load a Gaussian-splat PLY, log a custom `GaussianSplats3D` archetype, and render it inside Rerun's built-in `Spatial3DView`.
+Minimal example of extending the stock Rerun viewer with one extra Gaussian splat visualizer.
 
 ## Run
 
-Bundled chair:
+Terminal 1:
 
 ```bash
-cargo run
+pixi run viewer
 ```
 
-Fast bundled chair run with Pixi-managed dependencies:
+Terminal 2:
 
 ```bash
-pixi run example-chair
+pixi run python python/log_gaussian_ply.py
 ```
 
-Your own PLY:
+Use your own PLY:
 
 ```bash
-cargo run -- /absolute/path/to/scene.ply
+pixi run python python/log_gaussian_ply.py /absolute/path/to/scene.ply
 ```
 
-Or with Pixi-managed dependencies:
+Choose an arbitrary entity path:
 
 ```bash
-pixi run view-ply -- /absolute/path/to/scene.ply
-```
-
-For the fastest local run outside Pixi, use:
-
-```bash
-cargo run --release -- /absolute/path/to/scene.ply
+pixi run python python/log_gaussian_ply.py /absolute/path/to/scene.ply scene/reconstruction/splats
 ```
 
 ## How It Works
 
-1. `src/ply.rs` loads a static Gaussian-splat PLY into a typed cloud.
-2. `src/main.rs` logs that cloud once as `GaussianSplats3D`.
-3. `src/main.rs` starts the native Rerun viewer and registers one custom visualizer.
-4. `src/gaussian_visualizer.rs` queries the archetype, builds the render cloud, and computes the visible candidate set.
-5. `src/gaussian_renderer.rs` runs the known-working splat renderer and draws inside `Spatial3DView`.
+1. Python loads a static Gaussian-splat `.ply`.
+2. Python builds `Gaussians3D(...)`.
+3. Python logs the splats to the chosen entity path with normal Rerun gRPC logging.
+4. Python sends one tiny stock `Spatial3DView` blueprint override rooted at `/` for the chosen splat entity path.
+5. The Rust viewer listens on port `9876`, stays otherwise stock, and one custom visualizer turns any logged `GaussianSplats3D` entity into draw data inside the built-in `Spatial3DView`.
+
+## What Stays Stock Rerun
+
+This is still the normal Rerun viewer. Built-in logging still works normally in the same session:
+
+- `Points3D`
+- `Ellipsoids3D`
+- `Transform3D`
+- `Pinhole`
+- `Image`
+- `DepthImage`
+- `Scalars`
+- and other standard Rerun archetypes
+
+Splats are just one added visualization path.
 
 ## Supported PLY Fields
 
@@ -55,15 +64,23 @@ ASCII and binary little-endian PLY are supported.
 
 ## Non-Goals
 
-- validation tooling
-- benchmarks
-- comparison tooling
-- Python logging
-- COLMAP
-- animation
-- compressed splat formats
-- extra viewer UI or research modes
+- custom view classes
+- validation or benchmarking
+- offscreen rendering
+- Rust-side PLY demo logging
+- Python custom archetype registration
+- InstantSplat or training integration
+- COLMAP, timelines, animation, or compressed splat formats
 
 ## Attribution
 
-This example was extracted from the larger working repo at `pablovela5620/rerun-custom-gs-visualizer`. The renderer path is Brush-inspired, but the repo is intentionally reduced to the smallest educational Rerun integration that still renders real Gaussian splats.
+This example was extracted from the larger working repo at `pablovela5620/rerun-custom-gs-visualizer`. The renderer behavior is kept from that repo, and the overall shape is intentionally reduced to a tiny stock-viewer extension.
+
+## Learn More
+
+For a deeper walkthrough of the Python contract, the Rust viewer extension, and the end-to-end data flow, see [docs/architecture.md](docs/architecture.md).
+
+For a Rust-focused walkthrough aimed at a Python-first reader, see [docs/rust_viewer.md](docs/rust_viewer.md).
+
+For the plan to package this viewer/helper pair for reuse in other repos, see
+[docs/packaging_plan.md](docs/packaging_plan.md).

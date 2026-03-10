@@ -9,8 +9,9 @@ bytemuck = { version = "1.23", features = ["derive"] }
 glam = "0.30"
 rayon = "1.11"
 re_crash_handler = "=0.30.0"
-re_log = "=0.30.0"
+re_grpc_server = "=0.30.0"
 re_log_channel = "=0.30.0"
+re_log = "=0.30.0"
 re_log_types = "=0.30.0"
 re_query = "=0.30.0"
 re_renderer = "=0.30.0"
@@ -20,7 +21,5 @@ re_view = "=0.30.0"
 re_view_spatial = "=0.30.0"
 re_viewer = "=0.30.0"
 re_viewer_context = "=0.30.0"
-re_viewport_blueprint = "=0.30.0"
 rerun = { version = "=0.30.0", features = ["native_viewer"] }
-thiserror = "2.0"
 tokio = { version = "1.50", features = ["macros", "rt-multi-thread"] }
