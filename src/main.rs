@@ -7,11 +7,10 @@
 mod gaussian_renderer;
 mod gaussian_visualizer;
 
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
-use std::sync::Arc;
-
 use re_sdk_types::View as _;
 use re_viewer::external::eframe;
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::sync::Arc;
 
 const VIEWER_NAME: &str = "Gaussian Splats Viewer";
 const GRPC_PORT: u16 = 9876;
@@ -23,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
 
     let grpc_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, GRPC_PORT));
     re_log::info!("Listening for Rerun logs on rerun+http://127.0.0.1:{GRPC_PORT}/proxy");
-    let log_rx = re_grpc_server::spawn_with_recv(
+    let grpc_rx = re_grpc_server::spawn_with_recv(
         grpc_addr,
         re_grpc_server::ServerOptions::default(),
         re_grpc_server::shutdown::never(),
@@ -52,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
                 re_viewer::AsyncRuntimeHandle::from_current_tokio_runtime_or_wasmbindgen()
                     .expect("tokio runtime should exist"),
             );
-            viewer.add_log_receiver(log_rx);
+            viewer.add_log_receiver(grpc_rx);
             viewer.extend_view_class(
                 re_sdk_types::blueprint::views::Spatial3DView::identifier(),
                 |registrator| {

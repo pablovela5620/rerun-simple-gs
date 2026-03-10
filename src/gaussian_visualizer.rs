@@ -18,8 +18,6 @@ use re_viewer_context::{
     VisualizerSystem,
 };
 use rerun::{Archetype as _, Component as _};
-
-const SPLAT_ENTITY_PATH: &str = "world/splats";
 const MAX_SPLATS_RENDERED: usize = 200_000;
 const MIN_RADIUS_PX: f32 = 0.35;
 const OPACITY_SCALE: f32 = 1.0;
@@ -108,8 +106,8 @@ impl GaussianSplats3D {
 
 #[derive(Default)]
 pub struct GaussianSplatVisualizer {
-    // One cached render cloud per entity path. The example only logs one entity, but the cache
-    // keeps the visualizer logic close to the real Rerun custom-visualizer shape.
+    // One cached render cloud per entity path. Unlike the earlier fixed-path demo, the visualizer
+    // now renders any entity that logs the Gaussian component contract.
     clouds: HashMap<String, CachedCloud>,
 }
 
@@ -214,11 +212,8 @@ impl VisualizerSystem for GaussianSplatVisualizer {
 
         for (data_result, instruction) in query.iter_visualizer_instruction_for(Self::identifier())
         {
-            // Query one logged `GaussianSplats3D` entity and rebuild the renderer-facing cloud only
-            // when the recorded data or transform signature changes.
-            if data_result.entity_path.to_string().trim_start_matches('/') != SPLAT_ENTITY_PATH {
-                continue;
-            }
+            // Query any logged `GaussianSplats3D` entity and rebuild the renderer-facing cloud
+            // only when the recorded data or transform signature changes.
 
             let results = data_result.query_archetype_with_history::<GaussianSplats3D>(
                 ctx,
