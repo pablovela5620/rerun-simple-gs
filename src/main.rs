@@ -10,6 +10,7 @@ mod gaussian_visualizer;
 mod ply;
 
 use std::env;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -35,8 +36,8 @@ use re_viewer::external::eframe;
 
 const APP_ID: &str = "gsplat-rerun-minimal";
 const RECORDING_NAME: &str = "Gaussian Splats Minimal";
-const SPLAT_PATH: &str = "world/splats";
-const WORLD_ROOT: &str = "world";
+const DEFAULT_SPLAT_PATH: &str = "world/splats";
+const VIEW_ROOT: &str = "/";
 const VIEW_ID_STR: &str = "11111111-1111-1111-1111-111111111111";
 const CONTAINER_ID_STR: &str = "22222222-2222-2222-2222-222222222222";
 const CONTAINER_ID_BYTES: [u8; 16] = [0x22; 16];
@@ -50,13 +51,13 @@ async fn main() -> anyhow::Result<()> {
     re_log::setup_logging();
     re_crash_handler::install_crash_handlers(re_viewer::build_info());
 
-    let scene_path = scene_path_from_args()?;
-    let gaussians = load_gaussian_ply(&scene_path)?;
+    let args = args_from_env()?;
+    let gaussians = load_gaussian_ply(&args.scene_path)?;
 
     let (tx, rx) = re_log_channel::log_channel(re_log_channel::LogSource::Sdk);
     let recording = recording_stream(tx)?;
     send_startup_blueprint(&recording, &gaussians)?;
-    log_gaussians(&recording, &gaussians)?;
+    log_gaussians(&recording, &gaussians, &args.entity_path)?;
     recording.flush_blocking()?;
 
     let main_thread_token = re_viewer::MainThreadToken::i_promise_i_am_on_the_main_thread();
@@ -98,16 +99,41 @@ async fn main() -> anyhow::Result<()> {
     .map_err(|err| anyhow::anyhow!(err))
 }
 
-fn scene_path_from_args() -> anyhow::Result<PathBuf> {
-    // The example supports exactly one optional positional path argument. Keeping CLI parsing this
-    // small avoids hiding the real rendering flow behind a framework.
+struct Args {
+    scene_path: PathBuf,
+    entity_path: String,
+}
+
+fn args_from_env() -> anyhow::Result<Args> {
+    // Keep parsing tiny: one optional scene path and one optional entity path.
     let mut args = env::args_os();
     let _program = args.next();
-    let path = match (args.next(), args.next()) {
-        (None, None) => bundled_chair_path(),
-        (Some(path), None) => PathBuf::from(path),
-        _ => anyhow::bail!("usage: cargo run -- [scene.ply]"),
-    };
+    let first = args.next();
+    let second = args.next();
+    let extra = args.next();
+    if extra.is_some() {
+        anyhow::bail!("usage: cargo run -- [scene.ply] [entity/path]");
+    }
+
+    let scene_path = first.map_or_else(bundled_chair_path, PathBuf::from);
+    let entity_path = second
+        .map(os_string_to_entity_path)
+        .transpose()?
+        .unwrap_or_else(|| DEFAULT_SPLAT_PATH.to_owned());
+
+    Ok(Args {
+        scene_path,
+        entity_path,
+    })
+}
+
+fn os_string_to_entity_path(path: OsString) -> anyhow::Result<String> {
+    let path = path
+        .into_string()
+        .map_err(|_| anyhow::anyhow!("entity path must be valid UTF-8"))?;
+    if path.trim().is_empty() {
+        anyhow::bail!("entity path must not be empty");
+    }
     Ok(path)
 }
 
@@ -134,6 +160,7 @@ fn recording_stream(log_tx: LogSender) -> anyhow::Result<rerun::RecordingStream>
 fn log_gaussians(
     recording: &rerun::RecordingStream,
     gaussians: &GaussianSet,
+    entity_path: &str,
 ) -> anyhow::Result<()> {
     // The archetype mirrors the renderer-facing layout closely:
     // world-space means, quaternions, scales, opacity, DC color, and optional SH tensor.
@@ -169,8 +196,8 @@ fn log_gaussians(
         );
     }
 
-    recording.log_static(SPLAT_PATH, &rerun::Clear::recursive())?;
-    recording.log_static(SPLAT_PATH, &archetype)?;
+    recording.log_static(entity_path, &rerun::Clear::recursive())?;
+    recording.log_static(entity_path, &archetype)?;
     Ok(())
 }
 
@@ -201,7 +228,7 @@ fn send_startup_blueprint(
         view_path.as_str(),
         &ViewBlueprint::new(ViewClass("3D".into()))
             .with_display_name(Name("Scene".into()))
-            .with_space_origin(ViewOrigin(WORLD_ROOT.into()))
+            .with_space_origin(ViewOrigin(VIEW_ROOT.into()))
             .with_visible(Visible(Bool(true))),
     )?;
     blueprint.log(
