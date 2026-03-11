@@ -9,7 +9,9 @@ mod gaussian_visualizer;
 
 use re_sdk_types::View as _;
 use re_viewer::external::eframe;
+use std::ffi::OsString;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::num::ParseIntError;
 use std::sync::Arc;
 
 const VIEWER_NAME: &str = "Gaussian Splats Viewer";
@@ -17,11 +19,20 @@ const GRPC_PORT: u16 = 9876;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let cli = parse_cli()?;
+    if cli.print_version {
+        println!("rerun-gs-viewer {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     re_log::setup_logging();
     re_crash_handler::install_crash_handlers(re_viewer::build_info());
 
-    let grpc_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, GRPC_PORT));
-    re_log::info!("Listening for Rerun logs on rerun+http://127.0.0.1:{GRPC_PORT}/proxy");
+    let grpc_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, cli.port));
+    re_log::info!(
+        "Listening for Rerun logs on rerun+http://127.0.0.1:{}/proxy",
+        cli.port
+    );
     let grpc_rx = re_grpc_server::spawn_with_recv(
         grpc_addr,
         re_grpc_server::ServerOptions::default(),
@@ -65,6 +76,70 @@ async fn main() -> anyhow::Result<()> {
         }),
     )
     .map_err(|err| anyhow::anyhow!(err))
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Cli {
+    port: u16,
+    print_version: bool,
+}
+
+fn parse_cli() -> anyhow::Result<Cli> {
+    let mut cli = Cli {
+        port: GRPC_PORT,
+        print_version: false,
+    };
+    let mut args = std::env::args_os().skip(1);
+
+    while let Some(arg) = args.next() {
+        if arg == "--version" || arg == "-V" {
+            cli.print_version = true;
+            continue;
+        }
+
+        if arg == "--port" {
+            let value = args
+                .next()
+                .ok_or_else(|| anyhow::anyhow!("missing value for --port"))?;
+            cli.port = parse_port(&value)?;
+            continue;
+        }
+
+        if let Some(value) = arg.to_str().and_then(|arg| arg.strip_prefix("--port=")) {
+            cli.port = parse_port_str(value)?;
+            continue;
+        }
+
+        if arg == "--memory-limit" || arg == "--server-memory-limit" {
+            let _ = args.next();
+            continue;
+        }
+
+        if arg == "--expect-data-soon" || arg == "--hide-welcome-screen" {
+            continue;
+        }
+
+        if arg.to_str().is_some_and(|arg| {
+            arg.starts_with("--memory-limit=") || arg.starts_with("--server-memory-limit=")
+        }) {
+            continue;
+        }
+    }
+
+    Ok(cli)
+}
+
+fn parse_port(value: &OsString) -> anyhow::Result<u16> {
+    let value = value
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("non-utf8 port value"))?;
+    parse_port_str(value)
+}
+
+fn parse_port_str(value: &str) -> anyhow::Result<u16> {
+    value
+        .parse::<u16>()
+        .map_err(|err: ParseIntError| anyhow::anyhow!("invalid port '{value}': {err}"))
 }
 
 fn native_options() -> eframe::NativeOptions {

@@ -220,7 +220,7 @@ impl VisualizerSystem for GaussianSplatVisualizer {
                 query,
                 instruction,
             );
-            let results = VisualizerInstructionQueryResults::new(instruction.id, &results, &output);
+            let results = VisualizerInstructionQueryResults::new(instruction, &results, &output);
 
             let centers = results.iter_required(GaussianSplats3D::descriptor_centers().component);
             if centers.is_empty() {
